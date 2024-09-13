@@ -8,27 +8,40 @@ import seaborn as sns
 import pandas as pd
 import matplotlib
 import numpy as np
+import itertools
 
 def utility(wealth):
     A = 2
     return 10000 * (wealth ** (1-A)) / (1-A)
 
 def get_exp_utility(starting_wealth, bin_values, bin_counts, num_repetitions):
-    probabilities = []
-    for i in range (0, num_repetitions + 1, 1):
-        m = math.comb(num_repetitions, i)
-        n = prob_win ** num_repetitions
-        prob = m * n
-        probabilities.append(prob)
-    exp_utility = 0
-    for i in range (0, num_repetitions + 1, 1):
-        net_gain = i * mag_win + (num_repetitions - i) * mag_loss
-        exp_utility += utility(starting_wealth + net_gain) * probabilities[i]
-    return (exp_utility)
+        # Normalize bin_counts to get probabilities
+    probabilities = bin_counts / np.sum(bin_counts)
+
+        # Generate all possible combinations of bin_values over num_repetitions
+    all_combinations = list(itertools.product(bin_values, repeat=num_repetitions))
+
+    expected_utility = 0
+
+        # Iterate over each combination
+    for combination in all_combinations:
+            # Calculate the probability of this combination (product of individual probabilities)
+        combination_prob = np.prod([probabilities[bin_values.index(value)] for value in combination])
+
+            # Calculate the resulting wealth for this combination
+        resulting_wealth = starting_wealth * np.prod(combination)
+
+            # Apply the utility function to the resulting wealth
+        util = utility(resulting_wealth)
+
+            # Add the weighted utility to the expected utility
+        expected_utility += combination_prob * util
+    return expected_utility
 
 def generate_bins(num_bins):
     df = pd.read_csv('SP500_percent_changes.csv')
-    returns = df['SP500_PCH'].values
+    percent_changes = df['SP500_PCH'].values
+    returns = [1 + (.01 * percent_change) for percent_change in percent_changes]
     min = np.min(returns)
     max = np.max(returns)
     spread = max-min
@@ -47,9 +60,11 @@ def generate_bins(num_bins):
     return(values, counts)
 
 
-starting_wealth = 1
+starting_wealth = 100
 num_bins = 10
-(bin_values, bin_counts) = generate_bins(num_bins)
-for i in range(0, num_bins):
-        print ('bin avg: ' + str(bin_values[i]) + ', bin count: ' + str(bin_counts[i]))
-#print("starting utility: " + str(utility(starting_wealth)) + "\nexpexted ending utility:" + str(get_exp_utility(starting_wealth, .5, 10, -8, 500)))
+# (bin_values, bin_counts) = generate_bins(num_bins)
+# for i in range(0, num_bins):
+#         print ('bin avg: ' + str(bin_values[i]) + ', bin count: ' + str(bin_counts[i]))
+bin_values = [-1, 1, 2]
+bin_counts = [1, 2, 1]
+print("starting utility: " + str(utility(starting_wealth)) + "\nexpexted ending utility: " + str(get_exp_utility(starting_wealth, bin_values, bin_counts, 10)))
