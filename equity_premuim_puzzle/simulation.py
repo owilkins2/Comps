@@ -30,6 +30,36 @@ def get_exp_utility(starting_wealth, bin_values, bin_counts, num_repetitions, nu
 
     return expected_utility
 
+def get_behavioral_utility(starting_wealth, bin_values, bin_counts, num_repetitions, bracket_size, loss_aversion_coefficient, num_samples=10000):
+    probabilities = bin_counts / np.sum(bin_counts)
+    expected_utility = 0
+
+    for _ in range(num_samples):
+        index = 0
+        while(index < num_repetitions):
+            sampled_combination = None
+            full_bracket= True
+            if(num_repetitions - index) > bracket_size:
+                sampled_combination = np.random.choice(bin_values, size=bracket_size, p=probabilities)
+            else:
+                sampled_combination = np.random.choice(bin_values, size=num_repetitions - index, p=probabilities)
+                full_bracket = False
+            resulting_wealth = starting_wealth * np.prod(sampled_combination)
+            util = 0
+            if (resulting_wealth >= starting_wealth):
+                util = utility(resulting_wealth)
+            else:
+                loss = starting_wealth - resulting_wealth
+                util = utility(starting_wealth - (loss * loss_aversion_coefficient))
+            if full_bracket:
+                expected_utility += util * (bracket_size / num_repetitions)
+            else:
+                expected_utility += util * ((num_repetitions - index) / num_repetitions)
+            index += bracket_size
+    expected_utility /= num_samples
+
+    return expected_utility
+
 
 def generate_bins(num_bins):
     df = pd.read_csv('SP500_percent_changes.csv')
@@ -78,18 +108,38 @@ def shift_distribution_mean(bin_values, annualized_amount):
     return shifted_bin_values
 
 
-starting_wealth = 100
-num_months = 120
-num_bins = 20
-(bin_values, bin_counts) = generate_bins(num_bins)
-new_bin_values = shift_distribution_mean(bin_values, -.0265)
-for i in range(0, num_bins):
-         print ('bin avg: ' + str(new_bin_values[i]) + ', bin count: ' + str(bin_counts[i]))
-# bin_values = [-1, 1, 2]
-# bin_counts = [1, 2, 1]
-print("Equity Premium: " + str((((get_distribution_mean(new_bin_values, bin_counts)** 12) -1) * 100) - get_bond_mean()))
-print("Utility Difference: " + str(get_exp_utility(starting_wealth, new_bin_values, bin_counts, num_months) -
-    utility(get_total_bond_return(num_months) * starting_wealth)))
-print("Stock Utility: " + str(get_exp_utility(starting_wealth, new_bin_values, bin_counts, num_months)) + ", Bond Utility: " +
-    str(utility(get_total_bond_return(num_months) * starting_wealth)))
-    
+def standard_calibration():
+    starting_wealth = 100
+    num_months = 120
+    num_bins = 20
+    (bin_values, bin_counts) = generate_bins(num_bins)
+    shift_amount = -.1
+    equity_premiums = []
+    utility_differentials = []
+    while(shift_amount <= 0):
+        new_bin_values = shift_distribution_mean(bin_values, shift_amount)
+        equity_premiums.append((((get_distribution_mean(new_bin_values, bin_counts)** 12) -1) * 100) - get_bond_mean())
+        utility_differentials.append(get_exp_utility(starting_wealth, new_bin_values, bin_counts, num_months, 1000)
+            - utility(get_total_bond_return(num_months) * starting_wealth))
+        shift_amount += .001
+    plt.scatter(equity_premiums, utility_differentials)
+    plt.show()
+
+def behavioral_calibration():
+    starting_wealth = 100
+    num_months = 120
+    num_bins = 20
+    bracket_size = 1
+    loss_aversion_coefficient = 2
+    (bin_values, bin_counts) = generate_bins(num_bins)
+    bracket_sizes = []
+    utilities = []
+    while bracket_size <= num_months:
+        bracket_sizes.append(bracket_size)
+        utilities.append(get_behavioral_utility(starting_wealth, bin_values, bin_counts, num_months, bracket_size, loss_aversion_coefficient, 10))
+        bracket_size += 1
+    print("Bond Utility: " + str(utility(get_total_bond_return(num_months) * starting_wealth)))
+    plt.scatter(bracket_sizes, utilities)
+    plt.show()
+
+standard_calibration()
